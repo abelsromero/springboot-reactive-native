@@ -1,0 +1,66 @@
+= Springboot reactive native
+
+Simple showcase of Spring Boot Native compilation.
+
+== Build and testing
+
+Building native image
+
+ ./gradlew nativeCompile
+
+Running binary
+
+ ./build/native/nativeCompile/springboot-reactive-native
+
+Testing
+
+ curl "http://localhost:8080/hello/123"
+
+You'll get a response like `{"message":"Generated message: Hello 123"}`.
+
+== Issues
+
+=== compileOnly dependencies are not considered for processAot
+
+`ApplicationRuntimeHintsRegistrar` uses https://github.com/ronmamo/reflections[Reflections project] to register all classes with custom annotation `@RegisterForReflection`.
+Given this is only required to generate the AOT configuration I would expect that dependencies required by Hints could be set as `compileOnly`.
+
+This is specially an issue when releasing both JVM and Native versions, since the JVM will include the dependencies in the package (for instance when releasing a Docker/OCI image).
+
+**TLDR;** running `./gradlew processAot` fails with, changing the dependency to `implementation` fixes it.
+
+```
+> Task :processAot FAILED
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.0.0)
+
+2022-12-20T20:31:34.016+01:00  INFO 30738 --- [           main] com.example.reactive.Application         : Starting Application using Java 19.0.1 with PID 30738 (/Users/romeroab/work/testbench/springboot-reactive-native/build/classes/java/main started by romeroab in /Users/romeroab/work/testbench/springboot-reactive-native)
+2022-12-20T20:31:34.019+01:00  INFO 30738 --- [           main] com.example.reactive.Application         : No active profile set, falling back to 1 default profile: "default"
+2022-12-20T20:31:34.937+01:00  INFO 30738 --- [           main] c.e.r.a.ApplicationRuntimeHintsRegistrar : Registering Hints
+Exception in thread "main" java.lang.NoClassDefFoundError: org/reflections/Reflections
+        at com.example.reactive.aot.ApplicationRuntimeHintsRegistrar.registerHints(ApplicationRuntimeHintsRegistrar.java:24)
+        at org.springframework.context.aot.RuntimeHintsBeanFactoryInitializationAotProcessor$RuntimeHintsRegistrarContribution.lambda$applyTo$0(RuntimeHintsBeanFactoryInitializationAotProcessor.java:116)
+        at java.base/java.util.LinkedHashMap$LinkedValues.forEach(LinkedHashMap.java:655)
+        at org.springframework.context.aot.RuntimeHintsBeanFactoryInitializationAotProcessor$RuntimeHintsRegistrarContribution.applyTo(RuntimeHintsBeanFactoryInitializationAotProcessor.java:110)
+        at org.springframework.context.aot.BeanFactoryInitializationAotContributions.applyTo(BeanFactoryInitializationAotContributions.java:78)
+        at org.springframework.context.aot.ApplicationContextAotGenerator.lambda$processAheadOfTime$0(ApplicationContextAotGenerator.java:58)
+        at org.springframework.context.aot.ApplicationContextAotGenerator.withCglibClassHandler(ApplicationContextAotGenerator.java:67)
+        at org.springframework.context.aot.ApplicationContextAotGenerator.processAheadOfTime(ApplicationContextAotGenerator.java:53)
+        at org.springframework.context.aot.ContextAotProcessor.performAotProcessing(ContextAotProcessor.java:106)
+        at org.springframework.context.aot.ContextAotProcessor.doProcess(ContextAotProcessor.java:84)
+        at org.springframework.context.aot.ContextAotProcessor.doProcess(ContextAotProcessor.java:49)
+        at org.springframework.context.aot.AbstractAotProcessor.process(AbstractAotProcessor.java:82)
+        at org.springframework.boot.SpringApplicationAotProcessor.main(SpringApplicationAotProcessor.java:76)
+Caused by: java.lang.ClassNotFoundException: org.reflections.Reflections
+        at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:641)
+        at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188)
+        at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:521)
+        ... 13 more
+
+```
